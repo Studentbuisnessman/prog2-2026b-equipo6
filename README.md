@@ -2,3 +2,5 @@
 Proyecto para programacion 2
 ## como se corre
 python.py
+## integrantes
+angel estuvo aquixd
