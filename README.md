@@ -4,3 +4,4 @@ Proyecto para programacion 2
 python.py
 ## integrantes
 angel estuvo aquixd
+Arturo Sandoval Alvarez como: StudentBusinessman
