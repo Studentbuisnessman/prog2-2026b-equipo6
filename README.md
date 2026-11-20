@@ -3,5 +3,5 @@ Proyecto para programacion 2
 ## como se corre
 python.py
 ## integrantes
-mendez serrano jose angel
+mendez serrano jose angel ///
 Arturo Sandoval Alvarez como: StudentBusinessman
