@@ -1,20 +1,21 @@
-"""Menú de terminal para probar el control de acceso simulado."""
+"""Interfaz sencilla por terminal para el control de acceso simulado."""
 
-from modelo import Usuario, Administrador, Servidor
+from modelo import Administrador, Servidor, Usuario
 from sistema import SistemaAccesos
 
 
-RUTA = "registros.txt"
+ARCHIVO = "registros.txt"
 
 
 def main():
-    """Muestra el menú y pide los datos necesarios para cada operación."""
+    """Carga registros, muestra el menú y procesa las opciones del usuario."""
     sistema = SistemaAccesos()
     try:
-        sistema.cargar(RUTA)
+        sistema.cargar(ARCHIVO)
     except ValueError as error:
-        print("No se pudieron recuperar los registros:", error)
-        print("El sistema iniciará vacío.")
+        print("Error al cargar el archivo:", error)
+        print("Los registros existentes no se modificarán automáticamente.")
+        return
 
     while True:
         print("\n====== CONTROL DE ACCESOS ======")
@@ -29,54 +30,48 @@ def main():
         try:
             if opcion == "1":
                 tipo = input("Tipo (1=Usuario, 2=Administrador): ").strip()
+                if tipo not in ("1", "2"):
+                    raise ValueError("Tipo inválido: escribe 1 o 2.")
                 cuenta = input("Cuenta: ")
                 nombre = input("Nombre: ")
-
                 if tipo == "1":
                     objeto = Usuario(cuenta, nombre, input("Área: "))
-                elif tipo == "2":
-                    nivel = input("Nivel de privilegio (1-3): ").strip()
-                    if not nivel.isascii() or not nivel.isdigit():
-                        raise ValueError("El nivel debe ser un número entre 1 y 3.")
-                    objeto = Administrador(cuenta, nombre, int(nivel))
                 else:
-                    raise ValueError("Tipo de cuenta inválido.")
-
+                    nivel = input("Nivel de privilegio (1-3): ")
+                    objeto = Administrador(cuenta, nombre, nivel)
                 sistema.registrar(objeto)
-                sistema.guardar(RUTA)
+                sistema.guardar(ARCHIVO)
                 print("Cuenta registrada correctamente.")
 
             elif opcion == "2":
                 nombre = input("Nombre del servidor: ")
                 ip = input("Dirección IPv4: ")
-                cupo = input("Cupo máximo: ").strip()
-                if not cupo.isascii() or not cupo.isdigit():
-                    raise ValueError("El cupo debe ser un número entero positivo.")
-                sistema.registrar_servidor(Servidor(nombre, ip, int(cupo)))
-                sistema.guardar(RUTA)
+                cupo = input("Cupo máximo: ")
+                sistema.registrar(Servidor(nombre, ip, cupo))
+                sistema.guardar(ARCHIVO)
                 print("Servidor registrado correctamente.")
 
             elif opcion == "3":
-                identificador = input("Cuenta: ").strip()
-                clave = input("Nombre del servidor: ").strip()
-                sistema.asignar(identificador, clave)
-                sistema.guardar(RUTA)
+                cuenta = input("Cuenta: ")
+                nombre_servidor = input("Nombre del servidor: ")
+                sistema.asignar(cuenta, nombre_servidor)
+                sistema.guardar(ARCHIVO)
                 print("Acceso asignado correctamente.")
 
             elif opcion == "4":
                 sistema.listar()
 
             elif opcion == "5":
-                sistema.guardar(RUTA)
-                print(f"Datos guardados en {RUTA}.")
+                sistema.guardar(ARCHIVO)
+                print("Datos guardados correctamente.")
 
             elif opcion == "6":
-                sistema.guardar(RUTA)
+                sistema.guardar(ARCHIVO)
                 print("Datos guardados. Hasta luego.")
                 break
 
             else:
-                print("Opción no válida.")
+                print("Opción inválida: elige un número del 1 al 6.")
 
         except ValueError as error:
             print("Error:", error)
