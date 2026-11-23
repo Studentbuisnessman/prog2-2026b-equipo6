@@ -1,17 +1,55 @@
 """Interfaz sencilla por terminal para el control de acceso simulado."""
 
 from modelo import Administrador, Servidor, Usuario
-from sistema import SistemaAccesos
+from sistema import SistemaAccesos, cargar, guardar
 
 
 ARCHIVO = "registros.txt"
+
+REQUISITOS_SERVIDOR = (
+    "Nombre del servidor: 2 a 30 caracteres. Usa letras de a-z o A-Z, "
+    "dígitos, guion o guion bajo e incluye al menos una letra o un dígito."
+)
+
+
+def pedir_cuenta():
+    """Pide los datos del tipo de cuenta elegido y construye el objeto."""
+    print("\n1. Usuario")
+    print("2. Administrador")
+    tipo = input("Tipo de cuenta: ").strip()
+    if tipo not in ("1", "2"):
+        raise ValueError("Elige 1 para usuario o 2 para administrador.")
+
+    print("Cada persona debe registrarse con un nombre completo único.")
+    print("Nombre completo: 4 a 60 caracteres. Solo letras y espacios.")
+    if tipo == "1":
+        print("Área: 2 a 60 caracteres. Solo letras y espacios.")
+    else:
+        print("Nivel de privilegio: número entero del 1 al 3.")
+
+    print("La longitud del texto se mide sin los espacios de los extremos.")
+    nombre = input("Nombre completo: ")
+    if tipo == "1":
+        return Usuario(nombre, input("Área: "))
+    return Administrador(nombre, input("Nivel de privilegio: "))
+
+
+def pedir_servidor():
+    """Muestra los requisitos y pide los datos del servidor."""
+    print("\n" + REQUISITOS_SERVIDOR)
+    print("IPv4: cuatro bloques de 0 a 255 separados por puntos, sin ceros iniciales.")
+    print("Cupo de sesiones: número entero mayor que cero.")
+    nombre = input("Nombre del servidor: ")
+    ip = input("Dirección IPv4: ")
+    cupo = input("Cupo de sesiones: ")
+    return Servidor(nombre, ip, cupo)
 
 
 def main():
     """Carga registros, muestra el menú y procesa las opciones del usuario."""
     sistema = SistemaAccesos()
     try:
-        sistema.cargar(ARCHIVO)
+        cargar(sistema, ARCHIVO)
     except ValueError as error:
         print("Error al cargar el archivo:", error)
         print("Los registros existentes no se modificarán automáticamente.")
@@ -29,44 +67,34 @@ def main():
 
         try:
             if opcion == "1":
-                tipo = input("Tipo (1=Usuario, 2=Administrador): ").strip()
-                if tipo not in ("1", "2"):
-                    raise ValueError("Tipo inválido: escribe 1 o 2.")
-                cuenta = input("Cuenta: ")
-                nombre = input("Nombre: ")
-                if tipo == "1":
-                    objeto = Usuario(cuenta, nombre, input("Área: "))
-                else:
-                    nivel = input("Nivel de privilegio (1-3): ")
-                    objeto = Administrador(cuenta, nombre, nivel)
-                sistema.registrar(objeto)
-                sistema.guardar(ARCHIVO)
+                sistema.registrar(pedir_cuenta())
+                guardar(sistema, ARCHIVO)
                 print("Cuenta registrada correctamente.")
 
             elif opcion == "2":
-                nombre = input("Nombre del servidor: ")
-                ip = input("Dirección IPv4: ")
-                cupo = input("Cupo máximo: ")
-                sistema.registrar(Servidor(nombre, ip, cupo))
-                sistema.guardar(ARCHIVO)
+                sistema.registrar(pedir_servidor())
+                guardar(sistema, ARCHIVO)
                 print("Servidor registrado correctamente.")
 
             elif opcion == "3":
-                cuenta = input("Cuenta: ")
+                print(REQUISITOS_SERVIDOR)
+                print("Usa una cuenta y un servidor registrados, con cupo disponible.")
+                print("Cada cuenta puede tener un acceso por servidor.")
+                nombre = input("Nombre completo registrado: ")
                 nombre_servidor = input("Nombre del servidor: ")
-                sistema.asignar(cuenta, nombre_servidor)
-                sistema.guardar(ARCHIVO)
+                sistema.asignar(nombre, nombre_servidor)
+                guardar(sistema, ARCHIVO)
                 print("Acceso asignado correctamente.")
 
             elif opcion == "4":
                 sistema.listar()
 
             elif opcion == "5":
-                sistema.guardar(ARCHIVO)
+                guardar(sistema, ARCHIVO)
                 print("Datos guardados correctamente.")
 
             elif opcion == "6":
-                sistema.guardar(ARCHIVO)
+                guardar(sistema, ARCHIVO)
                 print("Datos guardados. Hasta luego.")
                 break
 

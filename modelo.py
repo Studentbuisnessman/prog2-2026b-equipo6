@@ -1,5 +1,7 @@
 """Clases y validaciones del control de acceso simulado a servidores."""
 
+import re
+
 
 def validar_texto(valor, campo, minimo=2, maximo=60):
     """Valida un nombre compuesto únicamente por letras y espacios."""
@@ -10,9 +12,6 @@ def validar_texto(valor, campo, minimo=2, maximo=60):
     if not valor.strip():
         raise ValueError(f"{campo} no puede contener solo espacios.")
 
-    if "\n" in valor or "\r" in valor or "|" in valor:
-        raise ValueError(f"{campo} contiene caracteres inválidos.")
-
     texto = valor.strip()
     if len(texto) < minimo:
         raise ValueError(f"{campo} debe tener al menos {minimo} caracteres.")
@@ -20,34 +19,16 @@ def validar_texto(valor, campo, minimo=2, maximo=60):
         raise ValueError(f"{campo} no puede superar {maximo} caracteres.")
     if any(caracter.isdigit() for caracter in texto):
         raise ValueError(f"{campo} no puede contener números; usa letras y espacios.")
-    if not all(caracter.isalpha() or caracter == " " for caracter in texto):
+    if not all(caracter.isalpha() or caracter == " " for caracter in valor):
         raise ValueError(
             f"{campo} contiene caracteres inválidos; usa letras y espacios."
         )
     return texto
 
 
-def validar_cuenta(valor):
-    """Valida el identificador de cuenta: 3 a 16 caracteres permitidos."""
-    if not isinstance(valor, str):
-        raise ValueError("La cuenta debe ser texto.")
-    if valor == "":
-        raise ValueError("La cuenta no puede estar vacía.")
-    if not valor.strip():
-        raise ValueError("La cuenta no puede contener solo espacios.")
-    if len(valor) < 3:
-        raise ValueError("La cuenta debe tener al menos 3 caracteres.")
-    if len(valor) > 16:
-        raise ValueError("La cuenta no puede superar 16 caracteres.")
-    if valor[0] not in "abcdefghijklmnopqrstuvwxyz":
-        raise ValueError("La cuenta debe comenzar con una letra minúscula (a-z).")
-    for caracter in valor:
-        if caracter not in "abcdefghijklmnopqrstuvwxyz0123456789_":
-            raise ValueError(
-                "La cuenta contiene caracteres inválidos: usa minúsculas, "
-                "números y guion bajo, sin espacios."
-            )
-    return valor
+def validar_nombre_persona(nombre):
+    """Valida el nombre completo usado para registrar y asignar accesos."""
+    return validar_texto(nombre, "El nombre de la persona", minimo=4)
 
 
 def validar_nombre_servidor(valor):
@@ -62,12 +43,11 @@ def validar_nombre_servidor(valor):
         raise ValueError("El nombre del servidor debe tener al menos 2 caracteres.")
     if len(valor) > 30:
         raise ValueError("El nombre del servidor no puede superar 30 caracteres.")
-    permitidos = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-    if not any(caracter.isalnum() for caracter in valor):
+    if re.fullmatch(r"[-_]+", valor):
         raise ValueError(
             "El nombre del servidor debe contener al menos una letra o un número."
         )
-    if any(caracter not in permitidos for caracter in valor):
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", valor):
         raise ValueError(
             "El nombre del servidor contiene caracteres inválidos: "
             "usa letras, números, guion o guion bajo, sin espacios."
@@ -85,23 +65,26 @@ def validar_entero(valor, campo, minimo=1, maximo=None):
         if not valor.strip():
             raise ValueError(f"{campo} no puede contener solo espacios.")
         texto = valor.strip()
-        if texto.startswith("-") and texto[1:].isascii() and texto[1:].isdigit():
-            numero = int(texto)
-        elif texto.isascii() and texto.isdigit():
-            numero = int(texto)
+        if re.fullmatch(r"-?[0-9]+", texto):
+            try:
+                numero = int(texto)
+            except ValueError as error:
+                raise ValueError(f"{campo} tiene demasiados dígitos.") from error
         elif texto.replace(" ", "").isalpha():
             raise ValueError(
                 f"{campo} no puede ser texto: escribe un número entero, "
                 "por ejemplo 2."
             )
-        elif "." in texto or "," in texto:
+        elif re.fullmatch(r"-?(?:[0-9]+[.,][0-9]*|[.,][0-9]+)", texto):
             raise ValueError(f"{campo} no acepta decimales: escribe un entero.")
         else:
             raise ValueError(
                 f"{campo} contiene caracteres inválidos: usa solo dígitos."
             )
+    elif isinstance(valor, float):
+        raise ValueError(f"{campo} no acepta decimales: escribe un entero.")
     else:
-        raise ValueError(f"{campo} debe ser un número entero, no otro tipo de dato.")
+        raise ValueError(f"{campo} debe ser un número entero.")
 
     if numero < minimo:
         raise ValueError(f"{campo} debe ser como mínimo {minimo}.")
@@ -132,7 +115,7 @@ def validar_ip(valor):
             )
         if len(parte) > 1 and parte.startswith("0"):
             raise ValueError("La IP no debe tener ceros iniciales en sus bloques.")
-        if int(parte) > 255:
+        if len(parte) > 3 or int(parte) > 255:
             raise ValueError("Cada bloque de la IP debe estar entre 0 y 255.")
     return valor
 
@@ -140,14 +123,9 @@ def validar_ip(valor):
 class CuentaAcceso:
     """Representa los datos comunes de una cuenta."""
 
-    def __init__(self, cuenta, nombre):
-        """Valida y guarda el identificador y el nombre de la cuenta."""
-        self.__cuenta = validar_cuenta(cuenta)
-        self.__nombre = validar_texto(nombre, "El nombre")
-
-    def obtener_cuenta(self):
-        """Devuelve el identificador sin permitir modificarlo directamente."""
-        return self.__cuenta
+    def __init__(self, nombre):
+        """Valida y guarda el nombre de la persona."""
+        self.__nombre = validar_nombre_persona(nombre)
 
     def obtener_nombre(self):
         """Devuelve el nombre registrado."""
@@ -155,15 +133,15 @@ class CuentaAcceso:
 
     def describir(self):
         """Devuelve la descripción común de la cuenta."""
-        return f"{self.__cuenta} - {self.__nombre}"
+        return self.__nombre
 
 
 class Usuario(CuentaAcceso):
     """Representa una cuenta de usuario de un área."""
 
-    def __init__(self, cuenta, nombre, area):
+    def __init__(self, nombre, area):
         """Valida los datos y guarda el área del usuario."""
-        super().__init__(cuenta, nombre)
+        super().__init__(nombre)
         self.__area = validar_texto(area, "El área")
 
     def obtener_area(self):
@@ -178,9 +156,9 @@ class Usuario(CuentaAcceso):
 class Administrador(CuentaAcceso):
     """Representa una cuenta con privilegios administrativos."""
 
-    def __init__(self, cuenta, nombre, nivel_privilegio):
+    def __init__(self, nombre, nivel_privilegio):
         """Valida los datos y el nivel de privilegio del administrador."""
-        super().__init__(cuenta, nombre)
+        super().__init__(nombre)
         self.__nivel_privilegio = validar_entero(
             nivel_privilegio, "El nivel de privilegio", 1, 3
         )
@@ -225,7 +203,7 @@ class Servidor:
 
     def dar_acceso(self, cuenta):
         """Asigna una cuenta validada sin repetirla ni superar el cupo."""
-        cuenta = validar_cuenta(cuenta)
+        cuenta = validar_nombre_persona(cuenta)
         if cuenta in self.__sesiones:
             raise ValueError(
                 f"La cuenta '{cuenta}' ya tiene acceso a '{self.__nombre}'."
@@ -234,7 +212,7 @@ class Servidor:
             raise ValueError(f"El servidor '{self.__nombre}' ya alcanzó su cupo.")
         self.__sesiones.append(cuenta)
 
-    def resumen(self):
+    def describir(self):
         """Describe el servidor y su ocupación actual."""
         return (
             f"{self.__nombre} ({self.__ip}) - "

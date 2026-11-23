@@ -6,7 +6,7 @@ from modelo import (
     Administrador,
     Servidor,
     Usuario,
-    validar_cuenta,
+    validar_nombre_persona,
     validar_nombre_servidor,
 )
 
@@ -32,10 +32,10 @@ class SistemaAccesos:
                     )
             self.__servidores[nombre] = objeto
         elif isinstance(objeto, (Usuario, Administrador)):
-            cuenta = objeto.obtener_cuenta()
-            if cuenta in self.__cuentas:
-                raise ValueError(f"La cuenta '{cuenta}' ya está registrada.")
-            self.__cuentas[cuenta] = objeto
+            nombre = objeto.obtener_nombre()
+            if nombre.casefold() in self.__cuentas:
+                raise ValueError(f"Ya hay una cuenta a nombre de '{nombre}'.")
+            self.__cuentas[nombre.casefold()] = objeto
         else:
             raise ValueError(
                 "Solo se pueden registrar objetos Usuario, Administrador o Servidor."
@@ -43,13 +43,14 @@ class SistemaAccesos:
 
     def asignar(self, identificador, clave):
         """Asigna una cuenta existente al servidor indicado por su nombre."""
-        identificador = validar_cuenta(identificador)
-        clave = validar_nombre_servidor(clave)
-        if identificador not in self.__cuentas:
-            raise ValueError(f"La cuenta '{identificador}' no está registrada.")
-        if clave not in self.__servidores:
-            raise ValueError(f"El servidor '{clave}' no está registrado.")
-        self.__servidores[clave].dar_acceso(identificador)
+        nombre = validar_nombre_persona(identificador)
+        nombre_servidor = validar_nombre_servidor(clave)
+        cuenta = self.__cuentas.get(nombre.casefold())
+        if cuenta is None:
+            raise ValueError(f"No hay una cuenta a nombre de '{nombre}'.")
+        if nombre_servidor not in self.__servidores:
+            raise ValueError(f"El servidor '{nombre_servidor}' no está registrado.")
+        self.__servidores[nombre_servidor].dar_acceso(cuenta.obtener_nombre())
 
     def listar(self):
         """Imprime cuentas, servidores y accesos o indica si no hay datos."""
@@ -69,7 +70,7 @@ class SistemaAccesos:
             print("No hay servidores registrados.")
         else:
             for servidor in self.__servidores.values():
-                print("-", servidor.resumen())
+                print("-", servidor.describir())
                 accesos = servidor.obtener_sesiones()
                 if accesos:
                     print("  Accesos:", ", ".join(accesos))
@@ -91,14 +92,6 @@ class SistemaAccesos:
         self.__cuentas = otro.__cuentas.copy()
         self.__servidores = otro.__servidores.copy()
 
-    def guardar(sistema, ruta):
-        """Método obligatorio: delega la escritura a guardar_archivo()."""
-        guardar_archivo(sistema, ruta)
-
-    def cargar(sistema, ruta):
-        """Método obligatorio: delega la lectura a cargar_archivo()."""
-        cargar_archivo(sistema, ruta)
-
 
 def validar_ruta(ruta):
     """Comprueba que la ruta del TXT no sea vacía ni tenga un tipo inválido."""
@@ -109,10 +102,12 @@ def validar_ruta(ruta):
         raise ValueError(
             "La ruta del archivo no puede estar vacía ni contener solo espacios."
         )
+    if "\0" in texto:
+        raise ValueError("La ruta contiene un carácter nulo.")
     return ruta
 
 
-def guardar_archivo(sistema, ruta):
+def guardar(sistema, ruta):
     """Guarda el estado completo como renglones separados por barras."""
     if not isinstance(sistema, SistemaAccesos):
         raise ValueError("El sistema que se desea guardar no es válido.")
@@ -122,13 +117,11 @@ def guardar_archivo(sistema, ruta):
             for cuenta in sistema.obtener_cuentas():
                 if isinstance(cuenta, Usuario):
                     archivo.write(
-                        f"USUARIO|{cuenta.obtener_cuenta()}|"
-                        f"{cuenta.obtener_nombre()}|{cuenta.obtener_area()}\n"
+                        f"USUARIO|{cuenta.obtener_nombre()}|{cuenta.obtener_area()}\n"
                     )
                 else:
                     archivo.write(
-                        f"ADMINISTRADOR|{cuenta.obtener_cuenta()}|"
-                        f"{cuenta.obtener_nombre()}|"
+                        f"ADMINISTRADOR|{cuenta.obtener_nombre()}|"
                         f"{cuenta.obtener_nivel_privilegio()}\n"
                     )
 
@@ -139,11 +132,11 @@ def guardar_archivo(sistema, ruta):
                 )
                 for cuenta in servidor.obtener_sesiones():
                     archivo.write(f"ACCESO|{cuenta}|{servidor.obtener_nombre()}\n")
-    except (OSError, TypeError, ValueError) as error:
+    except (OSError, ValueError) as error:
         raise ValueError(f"No se pudieron guardar los datos: {error}") from error
 
 
-def cargar_archivo(sistema, ruta):
+def cargar(sistema, ruta):
     """Reconstruye los objetos desde el TXT sin aceptar datos incompletos."""
     if not isinstance(sistema, SistemaAccesos):
         raise ValueError("El sistema donde se desea cargar no es válido.")
@@ -154,11 +147,12 @@ def cargar_archivo(sistema, ruta):
     except FileNotFoundError:
         sistema.reemplazar_registros(SistemaAccesos())
         return
-    except (OSError, TypeError, UnicodeError) as error:
+    except (OSError, UnicodeError) as error:
         raise ValueError(f"No se pudo leer el archivo de datos: {error}") from error
 
     temporal = SistemaAccesos()
     accesos = []
+    nombres_anteriores = {}
 
     for numero, linea in enumerate(lineas, 1):
         if not linea.strip():
@@ -166,10 +160,17 @@ def cargar_archivo(sistema, ruta):
         datos = linea.rstrip("\r\n").split("|")
         tipo = datos[0]
         try:
-            if tipo == "USUARIO" and len(datos) == 4:
-                temporal.registrar(Usuario(datos[1], datos[2], datos[3]))
-            elif tipo == "ADMINISTRADOR" and len(datos) == 4:
-                temporal.registrar(Administrador(datos[1], datos[2], datos[3]))
+            if tipo in ("USUARIO", "ADMINISTRADOR") and len(datos) == 4:
+                # Los archivos anteriores guardaban una clave antes del nombre.
+                clave_anterior = datos.pop(1)
+                if clave_anterior in nombres_anteriores:
+                    raise ValueError("clave repetida en el archivo anterior")
+                nombres_anteriores[clave_anterior] = datos[1]
+
+            if tipo == "USUARIO" and len(datos) == 3:
+                temporal.registrar(Usuario(datos[1], datos[2]))
+            elif tipo == "ADMINISTRADOR" and len(datos) == 3:
+                temporal.registrar(Administrador(datos[1], datos[2]))
             elif tipo == "SERVIDOR" and len(datos) == 4:
                 temporal.registrar(Servidor(datos[1], datos[2], datos[3]))
             elif tipo == "ACCESO" and len(datos) == 3:
@@ -183,18 +184,12 @@ def cargar_archivo(sistema, ruta):
 
     for numero, cuenta, nombre_servidor in accesos:
         try:
+            if nombres_anteriores:
+                if cuenta not in nombres_anteriores:
+                    raise ValueError("el acceso hace referencia a una cuenta desconocida")
+                cuenta = nombres_anteriores[cuenta]
             temporal.asignar(cuenta, nombre_servidor)
         except ValueError as error:
             raise ValueError(f"Línea {numero}: {error}") from error
 
     sistema.reemplazar_registros(temporal)
-
-
-def guardar(sistema, ruta):
-    """Permite invocar también el contrato guardar(sistema, ruta)."""
-    guardar_archivo(sistema, ruta)
-
-
-def cargar(sistema, ruta):
-    """Permite invocar también el contrato cargar(sistema, ruta)."""
-    cargar_archivo(sistema, ruta)
